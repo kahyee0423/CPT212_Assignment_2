@@ -1,100 +1,123 @@
-def preprocess_bad_character(pattern):
-    """Generate bad character table: maps character to its last index in the pattern."""
-    return {char: i for i, char in enumerate(pattern)}  # For each character, store its last occurrence index
+NO_OF_CHARS = 256  # Standard ASCII table size
 
+def bad_char_heuristic(pattern):
+    """
+    Preprocess the pattern to create the bad character table.
+    Each character maps to its last index in the pattern.
+    """
+    bad_char = [-1] * NO_OF_CHARS
+    for i in range(len(pattern)):
+        bad_char[ord(pattern[i])] = i
+    return bad_char
 
-def preprocess_good_suffix(pattern):
-    """Generate good suffix shift tables L and l."""
+def good_suffix_heuristic(pattern):
+    """
+    Preprocess the pattern to create the good suffix shift tables (L and l).
+    These are used to determine the shift amount when a suffix match occurs.
+    """
     m = len(pattern)
-    N = [0] * m  # N[i]: length of the longest suffix ending at i that is also a prefix
-    L = [0] * m  # L[i]: largest position less than m such that substring P[i:] matches a suffix of P[0:j]
-    l = [0] * (m + 1)  # l[i]: length of the largest suffix of P[0:i] that is also a prefix of P
+    N = [0] * m
+    L = [0] * m
+    l = [0] * (m + 1)
 
-    # Compute N array (Z-array in reverse)
-    N[m - 1] = m  # The whole pattern is a suffix of itself
+    # Compute N array using a reversed Z-algorithm
+    N[m - 1] = m
     g = m - 1
     f = m - 1
-    for i in range(m - 2, -1, -1):  # Loop from second last to first character
+    for i in range(m - 2, -1, -1):
         if i > g and N[i + m - 1 - f] < i - g:
-            N[i] = N[i + m - 1 - f]  # Use previously computed values to avoid rechecking
+            N[i] = N[i + m - 1 - f]
         else:
             g = i
             f = i
             while g >= 0 and pattern[g] == pattern[g + m - 1 - f]:
-                g -= 1  # Compare backwards for longest suffix
-            N[i] = f - g  # Store the matched suffix length
+                g -= 1
+            N[i] = f - g
 
-    # Compute L array from N
+    # Compute L table from N
     for j in range(m - 1):
         i = m - N[j]
         if i < m:
-            L[i] = j + 1  # Set the appropriate shift index based on N values
+            L[i] = j + 1
 
-    # Compute l' array from N
+    # Compute l table from N
     for i in range(m):
         if N[i] > 0:
-            l[m - N[i]] = i  # Set shift for full match suffixes
+            l[m - N[i]] = i
     for i in range(m - 1, 0, -1):
         if l[i] == 0:
-            l[i] = l[i + 1]  # Fill in 0s with next known suffix shift
+            l[i] = l[i + 1]
 
     return L, l
 
-
 def boyer_moore(text, pattern):
-    """Search pattern in text using Boyer-Moore algorithm with debug prints."""
-    if not pattern or not text or len(pattern) > len(text):
-        return []  # Edge case: invalid input
-
-    # Preprocessing phase
-    bad_char = preprocess_bad_character(pattern)
-    L, l = preprocess_good_suffix(pattern)
-
-    m = len(pattern)
+    """
+    Performs Boyer-Moore search on the input text using both
+    Bad Character and Good Suffix heuristics.
+    """
     n = len(text)
-    positions = []  # Store matched positions
-    s = 0  # Shift of the pattern with respect to text
+    m = len(pattern)
+
+    if m == 0 or n < m:
+        return []
+
+    # Preprocess pattern
+    bad_char = bad_char_heuristic(pattern)
+    L, l = good_suffix_heuristic(pattern)
+
+    positions = []
+    s = 0  # shift of pattern relative to text
 
     while s <= n - m:
-        j = m - 1  # Start comparing from the end of the pattern
-        while j >= 0 and pattern[j] == text[s + j]:
-            j -= 1  # Keep moving left if characters match
+        j = m - 1
 
-        # Debug print current alignment
+        # Compare pattern with text from right to left
+        while j >= 0 and pattern[j] == text[s + j]:
+            j -= 1
+
+        # Debug visual output
         print("\nText    :", text)
-        print("Pattern :", ' ' * s + pattern)
+        print("Pattern :", " " * s + pattern)
 
         if j < 0:
             # Match found
-            print(f"Match found at index {s}. Shifting pattern by {m - l[1] if m > 1 else 1} (Good Suffix Rule).")
             positions.append(s)
-            s += m - l[1] if m > 1 else 1  # Shift pattern by full match rule
+            # Shift by the period of the pattern (m - l[1])
+            shift = m - l[1] if m > 1 else 1
+            print(f"Match found at index {s}. Shifting by {shift} using Good Suffix rule.")
+            s += shift
         else:
-            # Mismatch occurred
-            bad_char_shift = j - bad_char.get(text[s + j], -1)  # Shift based on last occurrence of bad character
+            # Mismatch: calculate shifts
+            mismatched_char = text[s + j]
+            bc_ord = ord(mismatched_char)
 
-            # Compute good suffix shift
-            if j + 1 == m:
-                good_suffix_shift = 1  # No suffix exists
-            elif L[j + 1] > 0:
-                good_suffix_shift = m - L[j + 1]
+            # Bad Character Shift
+            if bc_ord < NO_OF_CHARS and bad_char[bc_ord] != -1:
+                bc_shift = max(1, j - bad_char[bc_ord])
             else:
-                good_suffix_shift = m - l[j + 1]
+                bc_shift = j + 1  # Character not found in pattern
 
-            # Choose the maximum shift between bad character and good suffix rule
-            final_shift = max(bad_char_shift, good_suffix_shift)
-            rule = "Bad Character" if bad_char_shift >= good_suffix_shift else "Good Suffix"
+            # Good Suffix Shift
+            if j == m - 1:
+                gs_shift = 1  # No good suffix exists
+            elif L[j + 1] > 0:
+                gs_shift = m - L[j + 1]  # Case 1: Strong good suffix
+            else:
+                gs_shift = m - l[j + 1]  # Case 2: Prefix matching
 
-            print(f"Mismatch at pattern[{j}] and text[{s + j}] "
-                  f"(text char: '{text[s + j]}', pattern char: '{pattern[j]}')")
-            print(f"Shifting by {final_shift} using {rule} Rule.")
-            s += final_shift  # Shift the pattern
+            shift = max(bc_shift, gs_shift)
+            rule_used = "Bad Character" if bc_shift >= gs_shift else "Good Suffix"
+            
+            print(f"Mismatch at index {s + j} (text char: '{mismatched_char}', pattern char: '{pattern[j]}').")
+            print(f"Bad Character shift: {bc_shift}, Good Suffix shift: {gs_shift}")
+            print(f"Shifting by {shift} position using {rule_used} rule.")
+            
+            s += shift
 
     return positions
 
-
-# Example usage
-if __name__ == "__main__":
+def main():
+    # User input for text and pattern
     text = input("Enter the text: ")
     pattern = input("Enter the pattern to find: ")
 
@@ -103,4 +126,8 @@ if __name__ == "__main__":
     if matches:
         print("\nPattern found at positions:", matches)
     else:
-        print("\nPattern not found in the text.")
+        print("\nPattern not found.")
+
+
+if __name__ == "__main__":
+    main()
