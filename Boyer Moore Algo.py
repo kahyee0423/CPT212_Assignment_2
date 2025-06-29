@@ -4,6 +4,7 @@ def bad_char_heuristic(pattern):
     """
     Preprocess the pattern to create the bad character table.
     Each character maps to its last index in the pattern.
+    If a character doesn't appear, its value remains -1.
     """
     bad_char = [-1] * NO_OF_CHARS
     for i in range(len(pattern)):
@@ -13,14 +14,15 @@ def bad_char_heuristic(pattern):
 def good_suffix_heuristic(pattern):
     """
     Preprocess the pattern to create the good suffix shift tables (L and l).
-    These are used to determine the shift amount when a suffix match occurs.
+    L[i] tells how far to shift when a suffix of length i matches but the character before it mismatches.
+    l[i] tells the largest position less than m such that P[i:] is a prefix of the pattern.
     """
     m = len(pattern)
-    N = [0] * m
-    L = [0] * m
-    l = [0] * (m + 1)
+    N = [0] * m # Suffix match lengths
+    L = [0] * m # Strong good suffix rule
+    l = [0] * (m + 1) # Weak good suffix rule
 
-    # Compute N array using a reversed Z-algorithm
+    # Compute N array 
     N[m - 1] = m
     g = m - 1
     f = m - 1
@@ -54,6 +56,7 @@ def boyer_moore(text, pattern):
     """
     Performs Boyer-Moore search on the input text using both
     Bad Character and Good Suffix heuristics.
+    Returns list of starting indices where pattern matches text.
     """
     n = len(text)
     m = len(pattern)
@@ -61,7 +64,7 @@ def boyer_moore(text, pattern):
     if m == 0 or n < m:
         return []
 
-    # Preprocess pattern
+    # Preprocess pattern by creating table
     bad_char = bad_char_heuristic(pattern)
     L, l = good_suffix_heuristic(pattern)
 
@@ -69,7 +72,7 @@ def boyer_moore(text, pattern):
     s = 0  # shift of pattern relative to text
 
     while s <= n - m:
-        j = m - 1
+        j = m - 1 # Start comparing from the rightmost character of the pattern
 
         # Compare pattern with text from right to left
         while j >= 0 and pattern[j] == text[s + j]:
@@ -101,7 +104,7 @@ def boyer_moore(text, pattern):
             if j == m - 1:
                 gs_shift = 1  # No good suffix exists
             elif L[j + 1] > 0:
-                gs_shift = m - L[j + 1]  # Case 1: Strong good suffix
+                gs_shift = m - L[j + 1] -1  # Case 1: Strong good suffix   # Added -1 to prevent over-shifting
             else:
                 gs_shift = m - l[j + 1]  # Case 2: Prefix matching
 
@@ -127,7 +130,6 @@ def main():
         print("\nPattern found at positions:", matches)
     else:
         print("\nPattern not found.")
-
 
 if __name__ == "__main__":
     main()
