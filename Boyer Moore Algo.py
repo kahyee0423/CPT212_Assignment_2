@@ -2,14 +2,15 @@ def preprocess_bad_character(pattern):
     """Generate bad character table: maps character to its last index in the pattern."""
     return {char: i for i, char in enumerate(pattern)}
 
+
 def preprocess_good_suffix(pattern):
-    """Generate good suffix shift table L and l."""
+    """Generate good suffix shift tables L and l."""
     m = len(pattern)
     N = [0] * m
     L = [0] * m
     l = [0] * (m + 1)
 
-    # Compute N array
+    # Compute N array (Z-array in reverse)
     N[m - 1] = m
     g = m - 1
     f = m - 1
@@ -31,13 +32,18 @@ def preprocess_good_suffix(pattern):
 
     # Compute l' array
     for i in range(m):
-        l[m - N[i]] = i
+        if N[i] > 0:
+            l[m - N[i]] = i
+    for i in range(m - 1, 0, -1):
+        if l[i] == 0:
+            l[i] = l[i + 1]
 
     return L, l
 
+
 def boyer_moore(text, pattern):
     """Search pattern in text using Boyer-Moore algorithm with debug prints."""
-    if not pattern or not text:
+    if not pattern or not text or len(pattern) > len(text):
         return []
 
     bad_char = preprocess_bad_character(pattern)
@@ -74,11 +80,13 @@ def boyer_moore(text, pattern):
             final_shift = max(bad_char_shift, good_suffix_shift)
             rule = "Bad Character" if bad_char_shift >= good_suffix_shift else "Good Suffix"
 
-            print(f"Mismatch at pattern[{j}] and text[{s + j}] (text char: '{text[s + j]}', pattern char: '{pattern[j]}')")
+            print(f"Mismatch at pattern[{j}] and text[{s + j}] "
+                  f"(text char: '{text[s + j]}', pattern char: '{pattern[j]}')")
             print(f"Shifting by {final_shift} using {rule} Rule.")
             s += final_shift
 
     return positions
+
 
 # Example usage
 if __name__ == "__main__":
